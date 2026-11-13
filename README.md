@@ -77,7 +77,7 @@ This part will be updated soon, since the extension has been updated recently.
 
 ## REPORT ISSUES
 
-https://github.com/fullstackfreelancer/slug/issues
+https://github.com/kohlerccode/slug/issues
 
 ## ALL OTHER REQUESTS
 
@@ -86,4 +86,4 @@ https://github.com/fullstackfreelancer/slug/issues
 ## CHANGELOG
 
 See the changelog for more details:
-https://github.com/fullstackfreelancer/slug/blob/master/CHANGELOG.md
+https://github.com/kohlerccode/slug/blob/master/CHANGELOG.md
