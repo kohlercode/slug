@@ -19,10 +19,8 @@
     window.slugNotes['notes.generator.after_generating'] = "{f:translate(key:'notes.generator.after_generating', extensionName: slug)}";
     </f:asset.script>
 
-    <div class="pt-3">
-        <f:flashMessages />
-        <f:render partial="SlugFilterList" arguments="{_all}"/>
-        <div class="container" id="slug-list-wrap">Loading...</div>
-    </div>
+    <f:flashMessages />
+    <f:render partial="SlugFilterList" arguments="{_all}"/>
+    <div id="slug-list-wrap" class="form-section">Loading...</div>
 
 </f:section>

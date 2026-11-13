@@ -1,65 +1,58 @@
-<div id="slug-filter-list">
-    <div class="container">
-
-        <div class="row g-2">
-            <div class="col-sm-2">
-                <h6>{f:translate(key:'filter.form.label.search_key', extensionName: slug)}</h6>
-                <input type="text" id="filter_key" class="form-control form-control-sm"/>
-            </div>
-            <div class="col-sm-2">
-                <h6>{f:translate(key:'filter.form.label.entries_per_page', extensionName: slug)}</h6>
-                <select class="form-select form-select-sm" id="filter_maxentries">
-                    <f:for each="{filterOptions.maxentries}" as="entry">
-                        <option value="{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultMaxEntries}', then: 'selected')}>
-                            {entry.label}
-                        </option>
-                    </f:for>
-                </select>
-            </div>
-            <div class="col-sm-2">
-                <h6>{f:translate(key:'filter.form.label.order_by', extensionName: slug)}</h6>
-                <select class="form-select form-select-sm" id="filter_orderby">
-                    <f:for each="{filterOptions.orderby}" as="entry">
-                        <option value="p.{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultSortfield}', then: 'selected')}>
-                            {entry.label}
-                        </option>
-                    </f:for>
-                </select>
-            </div>
-            <div class="col-sm-2">
-                <h6>{f:translate(key:'filter.form.label.order', extensionName: slug)}</h6>
-                <select class="form-select form-select-sm" id="filter_order">
-                    <f:for each="{filterOptions.order}" as="entry">
-                        <option value="{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultSortby}', then: 'selected')}>
-                            {entry.label}
-                        </option>
-                    </f:for>
-                </select>
-            </div>
-            <div class="col-sm-2">
-                <h6>{f:translate(key:'filter.form.label.status', extensionName: slug)}</h6>
-                <select class="form-select form-select-sm" id="filter_status">
-                    <option value="all">{f:translate(key:'filter.form.select.option.all', extensionName: 'slug')}</option>
-                    <option value="visible" selected>{f:translate(key:'filter.form.select.option.visible', extensionName: 'slug')}</option>
-                    <option value="hidden">{f:translate(key:'filter.form.select.option.hidden', extensionName: 'slug')}</option>
-                </select>
-            </div>
-            <div class="col-2">
-                <h6>Actions</h6>
-                <div class="btn-group">
-                    <button class="btn btn-sm btn-default" id="btn-save-all" title="{f:translate(key:'button.saveall.title', extensionName: slug)}">
-                        <i class="bi bi-check"></i> {f:translate(key:'button.saveall.label', extensionName: slug)}
-                    </button>
-                    <button class="btn btn-sm btn-default" id="btn-generate-all" title="{f:translate(key:'button.generateall.title', extensionName: slug)}">
-                        <i class="bi bi-refresh"></i> {f:translate(key:'button.generateall.label', extensionName: slug)}
-                    </button>
-                </div>
+<div id="slug-filter-list" class="form-section border-bottom">
+    <div class="form-row">
+        <div class="form-group flex-grow-1">
+            <label class="form-label" for="filter_key">{f:translate(key:'filter.form.label.search_key', extensionName: 'slug')}</label>
+            <input type="search" id="filter_key" class="form-control" autocomplete="off"/>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="filter_maxentries">{f:translate(key:'filter.form.label.entries_per_page', extensionName: 'slug')}</label>
+            <select class="form-select" id="filter_maxentries">
+                <f:for each="{filterOptions.maxentries}" as="entry">
+                    <option value="{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultMaxEntries}', then: 'selected')}>
+                        {entry.label}
+                    </option>
+                </f:for>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="filter_orderby">{f:translate(key:'filter.form.label.order_by', extensionName: 'slug')}</label>
+            <select class="form-select" id="filter_orderby">
+                <f:for each="{filterOptions.orderby}" as="entry">
+                    <option value="p.{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultSortfield}', then: 'selected')}>
+                        {entry.label}
+                    </option>
+                </f:for>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="filter_order">{f:translate(key:'filter.form.label.order', extensionName: 'slug')}</label>
+            <select class="form-select" id="filter_order">
+                <f:for each="{filterOptions.order}" as="entry">
+                    <option value="{entry.value}" {f:if(condition: '{entry.value} == {extconf.settings.defaultSortby}', then: 'selected')}>
+                        {entry.label}
+                    </option>
+                </f:for>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="filter_status">{f:translate(key:'filter.form.label.status', extensionName: 'slug')}</label>
+            <select class="form-select" id="filter_status">
+                <option value="all">{f:translate(key:'filter.form.select.option.all', extensionName: 'slug')}</option>
+                <option value="visible" selected>{f:translate(key:'filter.form.select.option.visible', extensionName: 'slug')}</option>
+                <option value="hidden">{f:translate(key:'filter.form.select.option.hidden', extensionName: 'slug')}</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <div class="form-label d-block">{f:translate(key:'filter.form.label.action', extensionName: 'slug')}</div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-default" id="btn-save-all" title="{f:translate(key:'button.saveall.title', extensionName: 'slug')}">
+                    <core:icon identifier="actions-save" size="small" /> {f:translate(key:'button.saveall.label', extensionName: 'slug')}
+                </button>
+                <button type="button" class="btn btn-default" id="btn-generate-all" title="{f:translate(key:'button.generateall.title', extensionName: 'slug')}">
+                    <core:icon identifier="actions-refresh" size="small" /> {f:translate(key:'button.generateall.label', extensionName: 'slug')}
+                </button>
             </div>
         </div>
-
-        <div class="my-3 d-flex justify-content-end">
-            <div id="slug-status"></div>
-        </div>
-
     </div>
+    <div id="slug-status"></div>
 </div>
