@@ -14,19 +14,21 @@
             <f:for each="{page}" as="page">
                 <div class="page mb-3">
                     <h1>{page.title}</h1>
-                    <div class="d-flex">
-                        <div class="input-group">
+                    <div class="form-row align-items-center">
+                        <div class="input-group flex-grow-1">
                             <span class="input-group-text">
                                 <core:icon identifier="flags-{page.language.flag}" size="small" />
                             </span>
                             <span class="input-group-text">
                                 {page.language.base}
                             </span>
-                            <input id="slug-input" type="text" name="slug" value="{page.slug}" class="form-control form-control-lg">
+                            <input id="slug-input" type="text" name="slug" value="{page.slug}" class="form-control">
                         </div>
-                        <button data-slug-edit="{page.uid}" class="btn btn-default btn-save"><i class="bi bi-save"></i></button>
-                        <button data-slug-generate="{page.uid}" class="btn btn-default btn-generate"><i class="bi bi-arrow-repeat"></i></button>
-                        <button data-slug-info="{page.uid}" class="btn btn-default btn-info"><i class="bi bi-info-circle"></i></button>
+                        <div class="btn-group">
+                            <button type="button" data-slug-edit="{page.uid}" class="btn btn-default btn-save"><core:icon identifier="actions-save" size="small" /></button>
+                            <button type="button" data-slug-generate="{page.uid}" class="btn btn-default btn-generate"><core:icon identifier="actions-refresh" size="small" /></button>
+                            <button type="button" data-slug-info="{page.uid}" class="btn btn-default btn-info"><core:icon identifier="actions-info-circle" size="small" /></button>
+                        </div>
                     </div>
                 </div>
             </f:for>

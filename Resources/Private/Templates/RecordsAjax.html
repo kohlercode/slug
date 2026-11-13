@@ -12,25 +12,21 @@
 </f:for>
 
 <f:section name="entry">
-    <div id="record-{record.uid}" data-locked="0" data-record="{record.uid}" data-siteprefix="0" data-table="{record.table}" data-slug-field="{record.slugField}" class="slug-record px-2 mb-2 shadow shadow-sm">
-        <div class="row">
-            <div class="col-lg-6 d-flex align-items-center">
-                <div class="{indent}">
-                    <f:render section="title" arguments="{title:record.title, uid:record.uid, hidden:record.hidden, table:record.table}"/>
-                </div>
+    <div id="record-{record.uid}" data-locked="0" data-record="{record.uid}" data-siteprefix="0" data-table="{record.table}" data-slug-field="{record.slugField}" class="slug-record border-bottom py-3">
+        <div class="form-row align-items-center">
+            <div class="flex-grow-1 {indent}">
+                <f:render section="title" arguments="{title:record.title, uid:record.uid, hidden:record.hidden, table:record.table}"/>
             </div>
-            <div class="col-lg-4 py-1">
+            <div class="flex-grow-1">
                 <div class="input-group">
                     <span class="input-group-text"><f:format.raw>{record.icon}</f:format.raw></span>
                     <input type="text" class="form-control slug-input" id="slug-input-field-{record.uid}" value="{record.slug}"/>
                 </div>
             </div>
-            <div class="col-lg-2 py-1">
-                <div class="button-group ms-auto">
-                    <a class="btn btn-default btn-save"><core:icon identifier="actions-save" size="small" /></a>
-                    <a class="btn btn-default btn-generate"><core:icon identifier="actions-refresh" size="small" /></a>
-                    <be:link.editRecord uid="{record.uid}" table="{record.table}" returnUrl="{f:be.uri(route: 'slug_list')}" class="btn btn-default btn-edit" title="{f:translate(key:'button.edit.page_properties', extensionName: 'slug')}"><i class="bi bi-pen"></i></be:link.editRecord>
-                </div>
+            <div class="btn-group">
+                <a class="btn btn-default btn-save"><core:icon identifier="actions-save" size="small" /></a>
+                <a class="btn btn-default btn-generate"><core:icon identifier="actions-refresh" size="small" /></a>
+                <be:link.editRecord uid="{record.uid}" table="{record.table}" returnUrl="{f:be.uri(route: 'slug_list')}" class="btn btn-default btn-edit" title="{f:translate(key:'button.edit.page_properties', extensionName: 'slug')}"><core:icon identifier="actions-open" size="small" /></be:link.editRecord>
             </div>
         </div>
     </div>
@@ -40,8 +36,8 @@
     <f:if condition="{hidden} === 1">
         <f:variable name="overlay" value="overlay-hidden"/>
     </f:if>
-    <div class="h5">
+    <div class="d-flex align-items-start gap-2 mb-1">
         <core:iconForRecord table="{table}" row="{uid:uid}" />
-        <span class="record-title fs-4 fw-bold locked-{locked}" contenteditable="false" data-uid="{uid}" data-table="{table}" title="double click to edit" style="white-space: nowrap;">{title}</span>
+        <span class="record-title fw-semibold text-break locked-{locked}" contenteditable="false" data-uid="{uid}" data-table="{table}" title="double click to edit">{title}</span>
     </div>
 </f:section>

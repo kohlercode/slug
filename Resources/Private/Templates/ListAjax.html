@@ -13,36 +13,28 @@
 </f:for>
 
 <f:section name="entry">
-    <div id="record-{page.uid}" data-locked="{page.tx_slug_locked}" data-record="{page.uid}" data-siteprefix="{page.base}{page.base_language}" data-table="pages" class="slug-record px-2 mb-2 shadow shadow-sm">
-        <div class="row">
-            <div class="col-lg-6 py-1">
-                <div class="d-flex">
-                    <div class="{indent}">
-                        <f:render section="title" arguments="{doktype:page.doktype, title:page.title, root:page.is_siteroot, uid:page.uid, hidden:page.hidden, locked:page.tx_slug_locked, full_url:page.full_url}"/>
-                    </div>
-                </div>
+    <div id="record-{page.uid}" data-locked="{page.tx_slug_locked}" data-record="{page.uid}" data-siteprefix="{page.base}{page.base_language}" data-table="pages" class="slug-record border-bottom py-3">
+        <div class="form-row align-items-center">
+            <div class="flex-grow-1 {indent}">
+                <f:render section="title" arguments="{doktype:page.doktype, title:page.title, root:page.is_siteroot, uid:page.uid, hidden:page.hidden, locked:page.tx_slug_locked, full_url:page.full_url}"/>
             </div>
-            <div class="col-lg-4 py-1">
+            <div class="flex-grow-1">
                 <div class="input-group">
                     <span class="input-group-text"><core:icon identifier="flags-{page.flag}" size="small" title="{page.flag}"/></span>
                     <input type="text" class="form-control slug-input" id="slug-input-field-{page.uid}" value="{page.slug}"/>
                 </div>
             </div>
-            <div class="col-lg-2 py-1">
-                <div class="button-group ms-auto">
-                    <f:if condition="{page.tx_slug_locked} === 0">
-                    <a class="btn btn-default btn-save"><core:icon identifier="actions-save" size="small" /></a>
-                    <a class="btn btn-default btn-generate"><core:icon identifier="actions-refresh" size="small" /></a>
-                    </f:if>
-                    <div class="dropdown d-inline">
-                      <button class="btn btn-default dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
-                      <ul class="dropdown-menu" style="min-width:230px;">
-                            <li><f:be.link route="slug_page" parameters="{id:page.uid}" class="dropdown-item"><i class="bi bi-pen"></i> {f:translate(key:'button.edit.open_in_slug_page_module', extensionName: 'slug')}</f:be.link></li>
-                            <li><be:link.editRecord uid="{page.uid}" table="pages" returnUrl="{f:be.uri(route: 'slug_list')}" class="dropdown-item"><i class="bi bi-pen"></i> {f:translate(key:'button.edit.page_properties', extensionName: 'slug')}</be:link.editRecord></li>
-                            <li><a href="#" class="dropdown-item btn-info"><core:icon identifier="actions-info-circle" size="small" /> Info (experimental)</a></li>
-                      </ul>
-                    </div>
-                </div>
+            <div class="btn-group">
+                <f:if condition="{page.tx_slug_locked} === 0">
+                <a class="btn btn-default btn-save"><core:icon identifier="actions-save" size="small" /></a>
+                <a class="btn btn-default btn-generate"><core:icon identifier="actions-refresh" size="small" /></a>
+                </f:if>
+                <button class="btn btn-default dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
+                <ul class="dropdown-menu">
+                    <li><f:be.link route="slug_page" parameters="{id:page.uid}" class="dropdown-item"><core:icon identifier="actions-open" size="small" /> {f:translate(key:'button.edit.open_in_slug_page_module', extensionName: 'slug')}</f:be.link></li>
+                    <li><be:link.editRecord uid="{page.uid}" table="pages" returnUrl="{f:be.uri(route: 'slug_list')}" class="dropdown-item"><core:icon identifier="actions-edit" size="small" /> {f:translate(key:'button.edit.page_properties', extensionName: 'slug')}</be:link.editRecord></li>
+                    <li><a href="#" class="dropdown-item btn-info"><core:icon identifier="actions-info-circle" size="small" /> Info (experimental)</a></li>
+                </ul>
             </div>
         </div>
         <div class="info-container"></div>
@@ -55,47 +47,47 @@
     </f:if>
     <f:if condition="{root} == 1">
         <f:then>
-            <h5>
+            <div class="d-flex align-items-start gap-2 mb-1">
                 <core:icon identifier="apps-pagetree-folder-root" overlay="{overlay}" size="small" title="uid={uid}"/>
                 <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-            </h5>
+            </div>
         </f:then>
         <f:else>
             <f:switch expression="{doktype}">
                 <f:case value="254">
-                    <h5>
+                    <div class="d-flex align-items-start gap-2 mb-1">
                         <core:icon identifier="apps-pagetree-folder-default" overlay="{overlay}" size="small" title="uid={uid}"/>
                         <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-                    </h5>
-                    <div class="slug-preview text-muted">{full_url}</div>
+                    </div>
+                    <div class="slug-preview text-muted text-break">{full_url}</div>
                 </f:case>
                 <f:case value="6">
-                    <h5>
+                    <div class="d-flex align-items-start gap-2 mb-1">
                         <core:icon identifier="apps-pagetree-page-backend-users" overlay="{overlay}" size="small" title="uid={uid}"/>
                         <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-                    </h5>
-                    <a href="{full_url}" target="_blank" class="slug-preview">{full_url}</a>
+                    </div>
+                    <a href="{full_url}" target="_blank" class="slug-preview text-break">{full_url}</a>
                 </f:case>
                 <f:case value="3">
-                    <h5>
+                    <div class="d-flex align-items-start gap-2 mb-1">
                         <core:icon identifier="apps-pagetree-page-shortcut-external" overlay="{overlay}" size="small" title="uid={uid}"/>
                         <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-                    </h5>
-                    <a href="{full_url}" target="_blank" class="slug-preview">{full_url}</a>
+                    </div>
+                    <a href="{full_url}" target="_blank" class="slug-preview text-break">{full_url}</a>
                 </f:case>
                 <f:case value="4">
-                    <h5>
+                    <div class="d-flex align-items-start gap-2 mb-1">
                         <core:icon identifier="apps-pagetree-page-shortcut" overlay="{overlay}" size="small" title="uid={uid}"/>
                         <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-                    </h5>
-                    <a href="{full_url}" target="_blank" class="slug-preview">{full_url}</a>
+                    </div>
+                    <a href="{full_url}" target="_blank" class="slug-preview text-break">{full_url}</a>
                 </f:case>
                 <f:defaultCase>
-                    <h5>
+                    <div class="d-flex align-items-start gap-2 mb-1">
                         <core:icon identifier="apps-pagetree-page-default" overlay="{overlay}" size="small" title="uid={uid}"/>
                         <f:render section="titlefield" arguments="{title:title,uid:uid,locked:locked}"/>
-                    </h5>
-                    <a href="{full_url}" target="_blank" class="slug-preview">{full_url}</a>
+                    </div>
+                    <a href="{full_url}" target="_blank" class="slug-preview text-break">{full_url}</a>
                 </f:defaultCase>
             </f:switch>
         </f:else>
@@ -103,5 +95,5 @@
 </f:section>
 
 <f:section name="titlefield">
-    <span class="page-title fs-4 fw-bold locked-{locked}" contenteditable="false" data-pageuid="{uid}" title="double click to edit" style="white-space: nowrap;">{title}</span>
+    <span class="page-title fw-semibold text-break locked-{locked}" contenteditable="false" data-pageuid="{uid}" title="double click to edit">{title}</span>
 </f:section>
