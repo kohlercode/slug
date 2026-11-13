@@ -1,295 +1,356 @@
 <?php
 /**
  * @author Simon Kohler <simon@kohlercode.com>
+ * Author: Simon Köhler (KOHLERCODE LLC)
  */
 
 declare(strict_types=1);
 namespace KOHLERCODE\Slug\Controller;
-use Psr\Http\Message\ServerRequestInterface;
-use KOHLERCODE\Slug\Utility\HelperUtility;
+
 use KOHLERCODE\Slug\Domain\Repository\PageRepository;
 use KOHLERCODE\Slug\Domain\Repository\RecordRepository;
+use KOHLERCODE\Slug\Security\RecordAccessGuard;
+use KOHLERCODE\Slug\Utility\HelperUtility;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\DataHandling\SlugHelper;
 use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Http\JsonResponse;
-use TYPO3\CMS\Core\View\ViewFactoryInterface;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Mvc\Controller\ActionController;
 
 /**
- * Class AjaxController
+ * Handles Ajax requests for slug and title editing.
  *
- * Handles various AJAX requests related to slug generation and management.
+ * Every action requires the Slug backend module. Writes are limited to the
+ * page slug/title or to slug and title fields configured for a table, and
+ * they are stored through DataHandler.
  */
+class AjaxController extends ActionController
+{
+    public HelperUtility $helper;
 
-class AjaxController extends ActionController {
-
-    /**
-     * @var HelperUtility
-     */
-    public $helper;
-
-    /**
-     * AjaxController constructor.
-     *
-     * @param PageRepository $pageRepository
-     * @param RecordRepository $recordRepository
-     * @param ViewFactoryInterface $viewFactory
-     */
     public function __construct(
         private PageRepository $pageRepository,
         private RecordRepository $recordRepository,
-        private ViewFactoryInterface $viewFactory
-    ){
+        private RecordAccessGuard $recordAccessGuard,
+    ) {
         $this->helper = GeneralUtility::makeInstance(HelperUtility::class);
     }
 
     /**
-     * Returns a list of pages via AJAX.
-     *
-     * @param ServerRequestInterface $request
-     * @return HtmlResponse
+     * Returns a list of pages the current backend user may see.
      */
-    public function listAction(ServerRequestInterface $request){
-        $params = $request->getQueryParams();
+    public function listAction(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new HtmlResponse('', 403);
+        }
+
+        $params = $this->queryParams($request);
         $pages = $this->pageRepository->getPageDataForList(
-            $params['maxentries'],
-            $params['key'],
-            $params['orderby'],
-            $params['order'],
-            $params['status']
+            $params['maxentries'] ?? 20,
+            $this->stringParam($params, 'key'),
+            $this->stringParam($params, 'orderby'),
+            $this->stringParam($params, 'order'),
+            $this->stringParam($params, 'status')
         );
-        $view = $this->helper->createViewAndTemplatePaths('ListAjax',$request);
+        $pages = $this->recordAccessGuard->filterReadablePages($pages);
+
+        $view = $this->helper->createViewAndTemplatePaths('ListAjax', $request);
         $view->assign('pages', $pages);
         $view->assign('params', $params);
-        $viewRendered = $view->render('ListAjax');
-        return new HtmlResponse($viewRendered);
+
+        return new HtmlResponse($view->render('ListAjax'));
     }
 
     /**
-     * Returns a list of extbase records via AJAX.
-     *
-     * @param ServerRequestInterface $request
-     * @return HtmlResponse
+     * Returns records from one configured table the current user may see.
      */
-    public function recordAction(ServerRequestInterface $request){
-        $params = $request->getQueryParams();
+    public function recordAction(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new HtmlResponse('', 403);
+        }
+
+        $params = $this->queryParams($request);
+        $table = $this->stringParam($params, 'table');
+        $fields = $this->recordAccessGuard->resolveRecordFields($table);
+        if ($fields === null) {
+            return new HtmlResponse('', 403);
+        }
+
         $records = $this->recordRepository->getRecordDataForList(
-            $params['table'],
-            $params['slug'],
-            $params['title'],
-            $params['maxentries'],
-            $params['key'],
-            $params['orderby'],
-            $params['order'],
-            $params['status']
+            $table,
+            $fields['slugField'],
+            $fields['titleField'],
+            $params['maxentries'] ?? 20,
+            $this->stringParam($params, 'key'),
+            $this->stringParam($params, 'orderby'),
+            $this->stringParam($params, 'order'),
+            $this->stringParam($params, 'status')
         );
-        $view = $this->helper->createViewAndTemplatePaths('RecordsAjax',$request);
+        $records = $this->recordAccessGuard->filterReadableRecords($table, $records);
+
+        $view = $this->helper->createViewAndTemplatePaths('RecordsAjax', $request);
         $view->assign('records', $records);
         $view->assign('params', $params);
-        $viewRendered = $view->render('RecordsAjax');
-        return new HtmlResponse($viewRendered);
+
+        return new HtmlResponse($view->render('RecordsAjax'));
     }
 
     /**
-     * Updates a page's slug and returns a JSON status response.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
+     * Updates a page slug when the user may edit that page.
      */
-    public function savePageSlug(\Psr\Http\Message\ServerRequestInterface $request)
+    public function savePageSlug(ServerRequestInterface $request): ResponseInterface
     {
-        $queryParams = $request->getQueryParams();
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return $this->deniedJson();
+        }
+
+        $params = $this->queryParams($request);
+        $storedSlug = $this->recordAccessGuard->updateSlug(
+            'pages',
+            $this->intParam($params, 'uid'),
+            $this->stringParam($params, 'slug')
+        );
+        if ($storedSlug === null) {
+            return $this->deniedJson();
+        }
+
+        return new JsonResponse([
+            'status' => '1',
+            'slug' => $storedSlug,
+        ]);
+    }
+
+    /**
+     * Updates the configured slug field of one additional table.
+     * The column name is taken from extension configuration, not from the request.
+     */
+    public function saveRecordSlug(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return $this->deniedJson();
+        }
+
+        $params = $this->queryParams($request);
+        $storedSlug = $this->recordAccessGuard->updateSlug(
+            $this->stringParam($params, 'table'),
+            $this->intParam($params, 'uid'),
+            $this->stringParam($params, 'slug')
+        );
+        if ($storedSlug === null) {
+            return $this->deniedJson();
+        }
+
+        return new JsonResponse([
+            'status' => '1',
+            'slug' => $storedSlug,
+        ]);
+    }
+
+    /**
+     * Checks whether a page slug already exists. The table is fixed to pages.
+     */
+    public function slugExists(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new HtmlResponse('', 403);
+        }
+
+        $params = $this->queryParams($request);
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $this->helper = GeneralUtility::makeInstance(HelperUtility::class);
-        $slug = $this->helper->returnUniqueSlug('page', $queryParams['slug'], $queryParams['uid'], 'pages', 'slug');
-        $queryBuilder->getRestrictions()->removeAll();
-        $statement = $queryBuilder
-            ->update('pages')
-            ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($queryParams['uid'],Connection::PARAM_INT))
-            )
-            ->set('slug',$slug)
-            ->executeQuery();
-        $responseInfo = [
-            'status' => $statement ? '1' : '0',
-            'slug' => $slug
-        ];
-        return new JsonResponse($responseInfo);
-    }
-
-    /**
-     * Saves a slug to a custom record table.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
-     */
-    public function saveRecordSlug(\Psr\Http\Message\ServerRequestInterface $request)
-    {
-        $queryParams = $request->getQueryParams();
-        $uid = $queryParams['uid'];
-        $table = $queryParams['table'];
-        $slug = $queryParams['slug'];
-        $slugField  = $queryParams['slugField'];
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-        $queryBuilder->getRestrictions()->removeAll();
-        $statement = $queryBuilder
-            ->update($table)
-            ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid,Connection::PARAM_INT))
-            )
-            ->set($slugField,$slug)
-            ->executeQuery();
-        $responseInfo = [
-            'status' => $statement ? '1' : '0',
-            'slug' => $slug
-        ];
-        return new JsonResponse($responseInfo);
-    }
-
-    /**
-     * Checks if a slug already exists in the pages table.
-     *
-     * @param ServerRequestInterface $request
-     * @return HtmlResponse
-     */
-    public function slugExists(\Psr\Http\Message\ServerRequestInterface $request)
-    {
-        $params = $request->getQueryParams();
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder->getRestrictions()->removeAll();
-        $result = $queryBuilder
+        $count = $queryBuilder
             ->count('slug')
             ->from('pages')
             ->where(
-                $queryBuilder->expr()->eq('slug', $queryBuilder->createNamedParameter($params['slug']))
+                $queryBuilder->expr()->eq(
+                    'slug',
+                    $queryBuilder->createNamedParameter($this->stringParam($params, 'slug'))
+                )
             )
             ->executeQuery()
-            ->fetchColumn(0);
-        return new HtmlResponse($result);
+            ->fetchOne();
+
+        return new HtmlResponse((string)$count);
     }
 
     /**
-     * Generates a page slug using TYPO3's slug configuration.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
+     * Generates a page slug for a page the user may read.
      */
-    public function getPageSlug(\Psr\Http\Message\ServerRequestInterface $request)
+    public function getPageSlug(ServerRequestInterface $request): ResponseInterface
     {
-        $fieldConfig = $GLOBALS['TCA']['pages']['columns']['slug']['config'];
-        $this->helper = GeneralUtility::makeInstance(HelperUtility::class);
-        $queryParams = $request->getQueryParams();
-        $slug = $this->helper->generatePageSlug($queryParams['uid'],$fieldConfig);
-        $responseInfo['slug'] = $slug;
-        return new JsonResponse($responseInfo);
-    }
-
-    /**
-     * Generates a record slug using a SlugHelper.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
-     */
-    public function generateRecordSlug(\Psr\Http\Message\ServerRequestInterface $request)
-    {
-        $queryParams = $request->getQueryParams();
-        $uid = (int)$queryParams['uid'];
-        $table = $queryParams['table'];
-        $slugField  = $queryParams['slugField'];
-        $titleField  = $queryParams['titleField'];
-
-        $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$slugField]['config'];
-        $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, $table, $slugField, $fieldConfig);
-        
-        // Get QueryBuilder for the specific table
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-        $queryBuilder->getRestrictions()->removeAll();
-        
-        $result = $queryBuilder
-            ->select('*')
-            ->from($table)
-            ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, Connection::PARAM_INT))
-            )
-            ->executeQuery();
-
-        // Fetch the single row
-        $row = $result->fetchAssociative();
-        $slugGenerated = '';
-
-        if ($row && isset($row[$titleField])) {
-            $slugGenerated = $slugHelper->sanitize($row[$titleField]);
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new JsonResponse(['slug' => ''], 403);
         }
 
-        $responseInfo = [
-            'success' => (bool)$row,
-            'slug' => $slugGenerated
-        ];
-        
-        return new JsonResponse($responseInfo);
+        $pageUid = $this->intParam($this->queryParams($request), 'uid');
+        if (!$this->recordAccessGuard->userMayReadPage($pageUid)) {
+            return new JsonResponse(['slug' => ''], 403);
+        }
+
+        $fieldConfig = $GLOBALS['TCA']['pages']['columns']['slug']['config'] ?? null;
+        if (!is_array($fieldConfig)) {
+            return new JsonResponse(['slug' => ''], 403);
+        }
+
+        return new JsonResponse([
+            'slug' => $this->helper->generatePageSlug($pageUid, $fieldConfig),
+        ]);
     }
 
     /**
-     * Renders detailed information about a page's slug and related metadata.
-     *
-     * @param ServerRequestInterface $request
-     * @return HtmlResponse
+     * Generates a record slug from the configured title field.
      */
-    public function slugInfo(\Psr\Http\Message\ServerRequestInterface $request)
+    public function generateRecordSlug(ServerRequestInterface $request): ResponseInterface
     {
-        $queryParams = $request->getQueryParams();
-        $root = BackendUtility::getRecord('pages',$queryParams['uid']);
-        $site = $this->helper->getSiteByPageUid($queryParams['uid']);
-        $view = $this->helper->createViewAndTemplatePaths('SlugInfo',$request);
-        $view->assign('uid',$root['uid']);
-        $view->assign('url',$this->helper->getAbsoluteUrl($root['uid']));
-        $view->assign('title',$root['seo_title'] ?: $root['title']);
-        $view->assign('description',$root['description'] ?: 'n/a');
-        $view->assign('sitename',$site['base']);
-        $translation = ['feature_note' => $this->helper->getLangKey('feature_note')];
-        $view->assign('translate',$translation);
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new JsonResponse(['success' => false, 'slug' => ''], 403);
+        }
+
+        $params = $this->queryParams($request);
+        $table = $this->stringParam($params, 'table');
+        $uid = $this->intParam($params, 'uid');
+        $fields = $this->recordAccessGuard->resolveRecordFields($table);
+        if ($fields === null || !$this->recordAccessGuard->userMayReadRecord($table, $uid)) {
+            return new JsonResponse(['success' => false, 'slug' => ''], 403);
+        }
+
+        $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$fields['slugField']]['config'] ?? null;
+        $record = BackendUtility::getRecord($table, $uid);
+        if (!is_array($fieldConfig) || !is_array($record) || !isset($record[$fields['titleField']])) {
+            return new JsonResponse(['success' => false, 'slug' => ''], 403);
+        }
+
+        $slugHelper = GeneralUtility::makeInstance(
+            SlugHelper::class,
+            $table,
+            $fields['slugField'],
+            $fieldConfig
+        );
+
+        return new JsonResponse([
+            'success' => true,
+            'slug' => $slugHelper->sanitize((string)$record[$fields['titleField']]),
+        ]);
+    }
+
+    /**
+     * Renders slug details for a page the user may read.
+     */
+    public function slugInfo(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return new HtmlResponse('', 403);
+        }
+
+        $pageUid = $this->intParam($this->queryParams($request), 'uid');
+        if (!$this->recordAccessGuard->userMayReadPage($pageUid)) {
+            return new HtmlResponse('', 403);
+        }
+
+        $page = BackendUtility::getRecord('pages', $pageUid);
+        if (!is_array($page)) {
+            return new HtmlResponse('', 404);
+        }
+
+        $site = $this->helper->getSiteByPageUid($pageUid);
+        $view = $this->helper->createViewAndTemplatePaths('SlugInfo', $request);
+        $view->assign('uid', $page['uid']);
+        $view->assign('url', $this->helper->getAbsoluteUrl((int)$page['uid']));
+        $view->assign('title', $page['seo_title'] ?: $page['title']);
+        $view->assign('description', $page['description'] ?: 'n/a');
+        $view->assign('sitename', is_array($site) ? ($site['base'] ?? '') : '');
+        $view->assign('translate', ['feature_note' => $this->helper->getLangKey('feature_note')]);
+
         return new HtmlResponse($view->render('SlugInfo'));
     }
 
     /**
-     * Updates the page title field via repository.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
+     * Updates a page title when the user may edit that page.
      */
-    public function updatePageTitle(\Psr\Http\Message\ServerRequestInterface $request){
-        $params = $request->getQueryParams();
-        if(isset($params['title']) && isset($params['uid'])){
-            $this->pageRepository->updatePageTitle($params['title'],$params['uid']);
-            $responseInfo['status'] = 'success';
+    public function updatePageTitle(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return $this->deniedTitleJson();
         }
-        else{
-            $responseInfo['status'] = 'error';
+
+        $params = $this->queryParams($request);
+        $storedTitle = $this->recordAccessGuard->updateTitle(
+            'pages',
+            $this->intParam($params, 'uid'),
+            $this->stringParam($params, 'title')
+        );
+        if ($storedTitle === null) {
+            return $this->deniedTitleJson();
         }
-        return new JsonResponse($responseInfo);
+
+        return new JsonResponse(['status' => 'success']);
     }
 
     /**
-     * Updates a custom record title field.
-     *
-     * @param ServerRequestInterface $request
-     * @return JsonResponse
+     * Updates the configured title field of one additional table.
      */
-    public function updateRecordTitle(\Psr\Http\Message\ServerRequestInterface $request){
-        $params = $request->getQueryParams();
-        if(isset($params['title']) && isset($params['uid']) && isset($params['table'])){
-            $this->recordRepository->updateRecordTitle($params['title'], $params['uid'], $params['table']);
-            $responseInfo['status'] = 'success';
+    public function updateRecordTitle(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->recordAccessGuard->hasModuleAccess()) {
+            return $this->deniedTitleJson();
         }
-        else{
-            $responseInfo['status'] = 'error';
+
+        $params = $this->queryParams($request);
+        $storedTitle = $this->recordAccessGuard->updateTitle(
+            $this->stringParam($params, 'table'),
+            $this->intParam($params, 'uid'),
+            $this->stringParam($params, 'title')
+        );
+        if ($storedTitle === null) {
+            return $this->deniedTitleJson();
         }
-        return new JsonResponse($responseInfo);
+
+        return new JsonResponse(['status' => 'success']);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function queryParams(ServerRequestInterface $request): array
+    {
+        $params = $request->getQueryParams();
+
+        return is_array($params) ? $params : [];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function intParam(array $params, string $key): int
+    {
+        return (int)($params[$key] ?? 0);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function stringParam(array $params, string $key): string
+    {
+        $value = $params[$key] ?? '';
+
+        return is_scalar($value) ? (string)$value : '';
+    }
+
+    private function deniedJson(): JsonResponse
+    {
+        return new JsonResponse([
+            'status' => '0',
+            'slug' => '',
+        ], 403);
+    }
+
+    private function deniedTitleJson(): JsonResponse
+    {
+        return new JsonResponse(['status' => 'error'], 403);
+    }
 }
