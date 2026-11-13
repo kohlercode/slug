@@ -2,22 +2,6 @@ $green: green;
 $blue: steelblue;
 $gray: #999;
 
-*{
-    border-radius: 0 !important;
-}
-
-.module-body{
-    padding: 0;
-}
-
-#typo3-inner-docbody{
-    padding: 0px;
-}
-
-div#typo3-docbody{
-    top: 0px !important;
-}
-
 #slug-list-wrap{
     tr.deleted{
         transition: all 0.1s ease-in-out;
@@ -47,11 +31,6 @@ div#typo3-docbody{
 
 input.has-been-changed{
     background-color: lighten(lightcyan,2%);
-}
-
-.slug-input,
-.slug-input-news{
-    min-width: 280px;
 }
 
 .text-blue{
@@ -204,4 +183,8 @@ input.has-been-changed{
 
 .not-saved{
     background-color: rgba(black,0.25);
+}
+
+.slug-preview{
+    overflow-wrap: anywhere;
 }
