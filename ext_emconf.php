@@ -8,10 +8,11 @@ $EM_CONF['slug'] = [
     'company' => 'kohlercode.com',
     'state' => 'alpha',
     'clearCacheOnLoad' => true,
-    'version' => '5.1.0',
+    'version' => '5.1.2',
     'constraints' => [
         'depends' => [
-            'typo3' => '14.1.0 - 14.1.99',
+            'php' => '8.2.0-8.99.99',
+            'typo3' => '14.1.0-14.1.99',
         ],
         'conflicts' => [],
         'suggests' => [],
