@@ -1,5 +1,6 @@
 <?php
 namespace KOHLERCODE\Slug\Domain\Repository;
+use KOHLERCODE\Slug\Security\RecordAccessGuard;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use KOHLERCODE\Slug\Utility\HelperUtility;
 use TYPO3\CMS\Core\Database\Connection;
@@ -46,10 +47,36 @@ class RecordRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         $maxitems = 10,
         string $searchkey = '',
         string $orderby = 'crdate',
-        string $order = 'ASC'
+        string $order = 'ASC',
+        string $status = 'all'
     ): array {
+        $accessGuard = GeneralUtility::makeInstance(RecordAccessGuard::class);
+        $configuredFields = $accessGuard->resolveRecordFields($tableName);
+        if ($configuredFields === null) {
+            return [];
+        }
+        // Field names always come from server configuration, never from the request.
+        $slugField = $configuredFields['slugField'];
+        $titleField = $configuredFields['titleField'];
+        $maxitems = $this->normalizeListLimit($maxitems);
+        $orderField = 'p.' . $this->normalizeRecordOrderField($orderby, $slugField, $titleField);
+        $orderDirection = $this->normalizeOrderDirection($order);
+        if (!in_array($status, ['all', 'visible', 'hidden'], true)) {
+            $status = 'all';
+        }
+
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($tableName);
         $queryBuilder->getRestrictions()->removeAll();
+
+        $translationJoin = $queryBuilder->expr()->and(
+            $queryBuilder->expr()->eq('t.l10n_parent', $queryBuilder->quoteIdentifier('p.uid')),
+            $queryBuilder->expr()->gt('t.sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+        );
+        if (!empty($GLOBALS['TCA'][$tableName]['ctrl']['versioningWS'])) {
+            $translationJoin = $translationJoin->with(
+                $queryBuilder->expr()->eq('t.t3ver_wsid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+            );
+        }
 
         // 1. Build the dynamic SELECT
         $query = $queryBuilder
@@ -74,10 +101,7 @@ class RecordRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 'p',
                 $tableName,
                 't',
-                $queryBuilder->expr()->and(
-                    $queryBuilder->expr()->eq('t.l10n_parent', $queryBuilder->quoteIdentifier('p.uid')),
-                    $queryBuilder->expr()->gt('t.sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
-                )
+                $translationJoin
             )
             // Only fetch default language records as parents
             ->where(
@@ -85,8 +109,19 @@ class RecordRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 $queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
             )
             ->setMaxResults($maxitems)
-            //->orderBy('p.' . ($orderby ?: 'crdate'), $order ?: 'DESC');
-            ->orderBy($orderby ?: 'crdate', $order ?: 'DESC');
+            ->orderBy($orderField, $orderDirection);
+
+        if (!empty($GLOBALS['TCA'][$tableName]['ctrl']['versioningWS'])) {
+            $query->andWhere(
+                $queryBuilder->expr()->eq('p.t3ver_wsid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+            );
+        }
+
+        if ($status === 'visible') {
+            $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
+        } elseif ($status === 'hidden') {
+            $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(1, Connection::PARAM_INT)));
+        }
 
         // 2. Dynamic Search
         if (!empty($searchkey)) {
@@ -141,16 +176,32 @@ class RecordRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         return $records;
     }
 
-    public function updateRecordTitle($title,$uid,$table)
+    private function normalizeListLimit($maxitems): int
     {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-        $queryBuilder
-            ->update($table)
-            ->where(
-                $queryBuilder->expr()->eq('uid', $uid)
-            )
-            ->set('title', $title)
-            ->executeQuery();
+        if (!is_scalar($maxitems)) {
+            return 20;
+        }
+        $maxitems = (int)$maxitems;
+        if ($maxitems < 1) {
+            return 20;
+        }
+        if ($maxitems > 5000) {
+            return 5000;
+        }
+
+        return $maxitems;
+    }
+
+    private function normalizeOrderDirection(string $order): string
+    {
+        return strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
+    }
+
+    private function normalizeRecordOrderField(string $orderby, string $slugField, string $titleField): string
+    {
+        $allowed = ['uid', 'crdate', 'tstamp', 'sys_language_uid', 'hidden', $slugField, $titleField];
+
+        return in_array($orderby, $allowed, true) ? $orderby : 'crdate';
     }
 
 }
