@@ -1,6 +1,7 @@
 <?php
 namespace KOHLERCODE\Slug\Domain\Repository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use KOHLERCODE\Slug\Security\RecordAccessGuard;
 use KOHLERCODE\Slug\Utility\HelperUtility;
 use TYPO3\CMS\Core\Site\SiteFinder;
 use TYPO3\CMS\Core\Database\Connection;
@@ -63,24 +64,25 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
 
     public function findTotalPages(){
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder->getRestrictions()->removeAll();
         $result = $queryBuilder
             ->count('uid')
             ->from('pages')
-            ->where('deleted = 0')
             ->executeQuery()
             ->fetchOne();
         return $result;
     }
 
     public function getPageData($pageUid){
+        $pageUid = (int)$pageUid;
+        if ($pageUid <= 0) {
+            return null;
+        }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder->getRestrictions()->removeAll();
         $result = $queryBuilder
             ->select('*')
             ->from('pages')
             ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($pageUid))
+                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($pageUid, Connection::PARAM_INT))
             )
             ->executeQuery();
         $row = $result->fetchAssociative();
@@ -92,10 +94,28 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
      */
     public function getPageDataForList($maxitems = 10, $searchkey = '', $orderby = 'crdate', $order = 'ASC', $status = 'all')
     {
+        $maxitems = $this->normalizeListLimit($maxitems);
+        $searchkey = is_scalar($searchkey) ? (string)$searchkey : '';
+        $orderField = 'p.' . $this->normalizePageOrderField($orderby);
+        $orderDirection = $this->normalizeOrderDirection($order);
+        if (!is_scalar($status) || !in_array((string)$status, ['all', 'visible', 'hidden'], true)) {
+            $status = 'all';
+        } else {
+            $status = (string)$status;
+        }
 
         $helper = GeneralUtility::makeInstance(HelperUtility::class);
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()->removeAll();
+        $translationJoin = $queryBuilder->expr()->and(
+            $queryBuilder->expr()->eq('t.l10n_parent', $queryBuilder->quoteIdentifier('p.uid')),
+            $queryBuilder->expr()->gt('t.sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+        );
+        if (!empty($GLOBALS['TCA']['pages']['ctrl']['versioningWS'])) {
+            $translationJoin = $translationJoin->with(
+                $queryBuilder->expr()->eq('t.t3ver_wsid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+            );
+        }
         $query = $queryBuilder
             ->select(
                 'p.uid AS uid',
@@ -124,44 +144,42 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 'p',
                 'pages',
                 't',
-                $queryBuilder->expr()->and(
-                    $queryBuilder->expr()->eq('t.l10n_parent', $queryBuilder->quoteIdentifier('p.uid')),
-                    $queryBuilder->expr()->gt('t.sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
-                )
+                $translationJoin
             )
             ->where(
                 $queryBuilder->expr()->eq('p.sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
             )
             ->setMaxResults($maxitems)
-            ->orderBy($orderby ?: 'p.crdate', $order ?: 'DESC');
+            ->orderBy($orderField, $orderDirection);
 
-
-            if (isset($searchkey)) {
+            if (!empty($GLOBALS['TCA']['pages']['ctrl']['versioningWS'])) {
                 $query->andWhere(
-                    $queryBuilder->expr()->like(
-                        'p.slug',
-                        $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($searchkey) . '%')
-                    )
+                    $queryBuilder->expr()->eq('p.t3ver_wsid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
                 );
-                $query->orWhere(
-                    $queryBuilder->expr()->like(
-                        't.slug',
-                        $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($searchkey) . '%')
+            }
+
+            if ($searchkey !== '') {
+                $query->andWhere(
+                    $queryBuilder->expr()->or(
+                        $queryBuilder->expr()->like(
+                            'p.slug',
+                            $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($searchkey) . '%')
+                        ),
+                        $queryBuilder->expr()->like(
+                            't.slug',
+                            $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($searchkey) . '%')
+                        )
                     )
                 );
             }
 
-            if ($status !== 'all') {
-                if ($status === 'visible') {
-                    $query->andWhere($queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
-                    $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
-                }
-                if ($status === 'hidden') {
-                    $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(1, Connection::PARAM_INT)));
-                    $query->andWhere($queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
-                }
-            }
-            else{
+            if ($status === 'visible') {
+                $query->andWhere($queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
+                $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
+            } elseif ($status === 'hidden') {
+                $query->andWhere($queryBuilder->expr()->eq('p.hidden', $queryBuilder->createNamedParameter(1, Connection::PARAM_INT)));
+                $query->andWhere($queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
+            } else {
                 $query->andWhere($queryBuilder->expr()->eq('p.deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)));
             }
 
@@ -227,31 +245,24 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         return $pages;
     }
 
-    public function updatePageTitle($title,$pageUid)
-    {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder
-            ->update('pages')
-            ->where(
-                $queryBuilder->expr()->eq('uid', $pageUid)
-            )
-            ->set('title', $title)
-            ->executeQuery();
-    }
-
     /*
     This function is used to get the data of a single page and its translations based on the page UID. 
     It returns an array with the page data and its translations.
     */
     public function getPageDataAndTranslatedChildren($pageUid)
     {
+        $pageUid = (int)$pageUid;
+        if ($pageUid <= 0) {
+            return [];
+        }
+
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()->removeAll();
 
         $queryBuilder
             ->select('*')
             ->from('pages')
-            ->orderBy('l10n_parent','ASC')
+            ->orderBy('l10n_parent', 'ASC')
             ->where(
                 $queryBuilder->expr()->or(
                     $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($pageUid, Connection::PARAM_INT)),
@@ -260,7 +271,16 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                         $queryBuilder->expr()->gt('l10n_parent', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
                     )
                 )
+            )
+            ->andWhere(
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
             );
+
+        if (!empty($GLOBALS['TCA']['pages']['ctrl']['versioningWS'])) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->eq('t3ver_wsid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT))
+            );
+        }
 
         $stmt = $queryBuilder->executeQuery();
         $pages = $stmt->fetchAllAssociative();
@@ -282,7 +302,53 @@ class PageRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
             }
         }
 
-        return $pages;
+        return GeneralUtility::makeInstance(RecordAccessGuard::class)->filterPageRows($pages);
+    }
+
+    private function normalizeListLimit($maxitems): int
+    {
+        if (!is_scalar($maxitems)) {
+            return 20;
+        }
+        $maxitems = (int)$maxitems;
+        if ($maxitems < 1) {
+            return 20;
+        }
+        if ($maxitems > 5000) {
+            return 5000;
+        }
+
+        return $maxitems;
+    }
+
+    private function normalizeOrderDirection($order): string
+    {
+        if (!is_scalar($order)) {
+            return 'ASC';
+        }
+
+        return strtoupper((string)$order) === 'DESC' ? 'DESC' : 'ASC';
+    }
+
+    private function normalizePageOrderField($orderby): string
+    {
+        $allowed = [
+            'uid',
+            'crdate',
+            'tstamp',
+            'title',
+            'slug',
+            'nav_title',
+            'sys_language_uid',
+            'is_siteroot',
+            'doktype',
+        ];
+        if (!is_scalar($orderby)) {
+            return 'crdate';
+        }
+        $orderby = (string)$orderby;
+
+        return in_array($orderby, $allowed, true) ? $orderby : 'crdate';
     }
 
 }
