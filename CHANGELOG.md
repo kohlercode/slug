@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [5.1.2] - 2026-11-13
+- Editor: Filter and record rows use TYPO3 backend form styles and wrap with the module width
+
+## [5.1.1] - 2026-11-13
+- Security: Backend Ajax routes require access to the Slug module
+- Security: Slug and title changes go through the DataHandler and respect page, table, and field permissions
+- Security: Record lists only query configured TCA tables and their slug and title fields
+
 ## [5.0.1] - 2026-02-08
 - Module names changed
 - PHP and JavaScript updates
