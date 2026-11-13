@@ -1,5 +1,8 @@
 <?php
 namespace KOHLERCODE\Slug\Utility;
+use KOHLERCODE\Slug\Security\RecordAccessGuard;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Site\SiteFinder;
 use TYPO3\CMS\Core\Exception\SiteNotFoundException;
@@ -133,36 +136,39 @@ class HelperUtility {
     }
 
     public function returnUniqueSlug($type,$slug,$recordUid,$table,$slugField) {
+        $recordUid = (int)$recordUid;
+        $table = (string)$table;
+        $slugField = (string)$slugField;
 
         switch ($type) {
             case 'page':
-                $fieldConfig = $GLOBALS['TCA']['pages']['columns']['slug']['config'];
-                $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, 'pages', 'slug', $fieldConfig);
-                $record = $this->getRecordForSlugBuilding($recordUid, 'pages');
-                $state = RecordStateFactory::forName('pages')->fromArray($record, $record['pid'], $recordUid);
-                $uniqueSlug = $slugHelper->buildSlugForUniqueInSite($slug, $state);
+                $table = 'pages';
+                $slugField = 'slug';
                 break;
             case 'news':
-                $fieldConfig = $GLOBALS['TCA']['tx_news_domain_model_news']['columns']['path_segment']['config'];
-                $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, 'tx_news_domain_model_news', 'path_segment', $fieldConfig);
-                $record = $this->getRecordForSlugBuilding($recordUid, 'tx_news_domain_model_news');
-                $state = RecordStateFactory::forName('tx_news_domain_model_news')->fromArray($record, $record['pid'], $recordUid);
-                $uniqueSlug = $slugHelper->buildSlugForUniqueInSite($slug, $state);
+                $table = 'tx_news_domain_model_news';
+                $slugField = 'path_segment';
                 break;
             case 'record':
-                $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$slugField]['config'];
-                $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, $table, $slugField, $fieldConfig);
-                $record = $this->getRecordForSlugBuilding($recordUid, $table);
-                $state = RecordStateFactory::forName($table)->fromArray($record, $record['pid'], $recordUid);
-                $uniqueSlug = $slugHelper->buildSlugForUniqueInSite($slug, $state);
                 break;
             default:
-                $uniqueSlug = 'url-'.time();
-                break;
+                return '';
         }
 
-        return $uniqueSlug;
+        $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$slugField]['config'] ?? null;
+        if (!is_array($fieldConfig) || ($fieldConfig['type'] ?? '') !== 'slug') {
+            return '';
+        }
 
+        $record = $this->getRecordForSlugBuilding($recordUid, $table);
+        if ($record === [] || !isset($record['pid'])) {
+            return '';
+        }
+
+        $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, $table, $slugField, $fieldConfig);
+        $state = RecordStateFactory::forName($table)->fromArray($record, $record['pid'], $recordUid);
+
+        return $slugHelper->buildSlugForUniqueInSite((string)$slug, $state);
     }
 
     public function getIsoCodeByLanguageUid($sys_language_uid) {
@@ -203,38 +209,40 @@ class HelperUtility {
 
 
     public function getRecordForSlugBuilding($uid,$table){
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-        $queryBuilder->getRestrictions()->removeAll();
-        $statement = $queryBuilder
-            ->select('*')
-            ->from($table)
-            ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid,Connection::PARAM_INT))
-            )
-            ->executeQuery();
-        $output = array();
-        while ($row = $statement->fetchAssociative()) {
-            $output = $row;
-            break;
+        $uid = (int)$uid;
+        $table = (string)$table;
+        if ($uid <= 0 || !$this->isDatabaseIdentifier($table) || !isset($GLOBALS['TCA'][$table])) {
+            return [];
         }
-        return $output;
+
+        $accessGuard = GeneralUtility::makeInstance(RecordAccessGuard::class);
+        if (!$accessGuard->userMayReadRecord($table, $uid)) {
+            return [];
+        }
+
+        $row = BackendUtility::getRecord($table, $uid);
+
+        return is_array($row) ? $row : [];
     }
 
     public function generatePageSlug($pageUid,$fieldConfig){
+        $pageUid = (int)$pageUid;
+        if ($pageUid <= 0 || !is_array($fieldConfig)) {
+            return '';
+        }
+        $accessGuard = GeneralUtility::makeInstance(RecordAccessGuard::class);
+        if (!$accessGuard->userMayReadPage($pageUid)) {
+            return '';
+        }
+
+        $record = BackendUtility::getRecord('pages', $pageUid);
+        if (!is_array($record) || !isset($record['pid'])) {
+            return '';
+        }
+
         $slugHelper = GeneralUtility::makeInstance(SlugHelper::class, 'pages', 'slug', $fieldConfig);
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder->getRestrictions()->removeAll();
-        $statement = $queryBuilder
-            ->select('*')
-            ->from('pages')
-            ->setMaxResults(1)
-            ->where(
-                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($pageUid,Connection::PARAM_INT))
-            )
-            ->executeQuery();
-        $record = $statement->fetchAssociative();
-        $slugGenerated = $slugHelper->generate($record, $record['pid']);
-        return $slugGenerated;
+
+        return $slugHelper->generate($record, $record['pid']);
     }
 
     /**
@@ -243,6 +251,15 @@ class HelperUtility {
      * @return void
      */
     public function getTotalRecords($table){
+        $table = (string)$table;
+        if (!$this->isDatabaseIdentifier($table) || !isset($GLOBALS['TCA'][$table])) {
+            return 0;
+        }
+        $backendUser = $GLOBALS['BE_USER'] ?? null;
+        if (!$backendUser instanceof BackendUserAuthentication || !$backendUser->check('tables_select', $table)) {
+            return 0;
+        }
+
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
         $count = $queryBuilder
            ->count('uid')
@@ -250,6 +267,11 @@ class HelperUtility {
            ->executeQuery()
            ->fetchOne();
         return $count;
+    }
+
+    private function isDatabaseIdentifier(string $name): bool
+    {
+        return (bool)preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $name);
     }
 
 }
