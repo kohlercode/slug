@@ -2,6 +2,7 @@
 namespace KOHLERCODE\Slug\Controller;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use KOHLERCODE\Slug\Security\RecordAccessGuard;
 use KOHLERCODE\Slug\Utility\HelperUtility;
 use KOHLERCODE\Slug\Domain\Repository\PageRepository;
 use TYPO3\CMS\Core\Imaging\Icon;
@@ -95,6 +96,7 @@ class SlugController extends ActionController {
     public function __construct(
         protected readonly ModuleTemplateFactory $moduleTemplateFactory,
         private PageRepository $pageRepository,
+        private RecordAccessGuard $recordAccessGuard,
     )
     {
         $extconfDefaults['settings'] = [
@@ -163,8 +165,11 @@ class SlugController extends ActionController {
      */
     protected function pageAction(): ResponseInterface
     {
-        $pageUid = $this->request->getQueryParams()['id'];
-        $pageData = $this->pageRepository->getPageDataAndTranslatedChildren($pageUid);
+        $pageUid = (int)($this->request->getQueryParams()['id'] ?? 0);
+        $pageData = [];
+        if ($this->recordAccessGuard->userMayReadPage($pageUid)) {
+            $pageData = $this->pageRepository->getPageDataAndTranslatedChildren($pageUid);
+        }
         $view = $this->initializeModuleTemplate($this->request);
         $view->assignMultiple([
             'extconf' => $this->extensionConfiguration,
@@ -254,15 +259,27 @@ class SlugController extends ActionController {
     {
         $view = $this->initializeModuleTemplate($this->request);
         $additionalTables = $this->extensionConfiguration['additionalTables'] ?? [];
-        $table = $this->request->getArgument('table') ?? '';
-        $tableData = $additionalTables[$table];
+        $table = $this->request->hasArgument('table') ? (string)$this->request->getArgument('table') : '';
+        $configuredFields = $this->recordAccessGuard->resolveRecordFields($table);
+        $tableData = ($configuredFields !== null && isset($additionalTables[$table]) && is_array($additionalTables[$table]))
+            ? $additionalTables[$table]
+            : [
+                'label' => '',
+                'slugField' => '',
+                'titleField' => '',
+                'pid' => 0,
+                'icon' => '',
+            ];
+        if ($configuredFields === null) {
+            $table = '';
+        }
 
         $filterOptions['orderby'] = [
             ['value' => 'uid', 'label' => $this->helper->getLangKey('filter.form.select.option.uid')],
             ['value' => 'crdate', 'label' => $this->helper->getLangKey('filter.form.select.option.creation_date')],
             ['value' => 'tstamp', 'label' => $this->helper->getLangKey('filter.form.select.option.tstamp')],
-            ['value' => 'title', 'label' => $this->helper->getLangKey('filter.form.select.option.title')],
-            ['value' => $tableData['slugField'] ?? 'slug', 'label' => $this->helper->getLangKey('filter.form.select.option.slug')],
+            ['value' => ($tableData['titleField'] ?? '') !== '' ? $tableData['titleField'] : 'title', 'label' => $this->helper->getLangKey('filter.form.select.option.title')],
+            ['value' => ($tableData['slugField'] ?? '') !== '' ? $tableData['slugField'] : 'slug', 'label' => $this->helper->getLangKey('filter.form.select.option.slug')],
             ['value' => 'sys_language_uid', 'label' => $this->helper->getLangKey('filter.form.select.option.sys_language_uid')],
         ];
 
@@ -302,7 +319,7 @@ class SlugController extends ActionController {
             'extEmconf' => $this->helper->getEmConfiguration('slug'),
             'filterOptions' => $filterOptions,
             'sites' => (array) $this->sites,
-            'request' => $this->request->getArguments(),
+            'request' => ['table' => $table],
             'tableData' => $tableData
         ]);
 
