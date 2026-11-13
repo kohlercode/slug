@@ -1,34 +1,54 @@
 {
     "name": "kohlercode/slug",
-    "description": "Slug - TYPO3 backend module for efficient management of URL slugs across pages and records, focused on SEO, bulk operations, and editorial productivity.",
+    "description": "TYPO3 backend module for efficient management of URL slugs across pages and records, focused on SEO, bulk operations, and editorial productivity.",
+    "license": "GPL-3.0-or-later",
     "type": "typo3-cms-extension",
-    "license": "GPL-3.0",
-    "require": {
-        "php": ">=8.0.0",
-        "typo3/cms-core": "^14.1"
-    },
+    "version": "5.1.2",
     "keywords": [
         "TYPO3",
         "extension",
+        "backend",
+        "module",
         "slug",
-        "slugs",
         "url",
-        "urltool",
-        "seo",
-        "seotool",
-        "tool",
-        "plugin"
+        "seo"
     ],
-    "homepage": "https://kohlercode.com/",
     "authors": [
         {
             "name": "Simon Köhler",
-            "email": "simon@kohlercode.com"
+            "email": "simon@kohlercode.com",
+            "homepage": "https://kohlercode.com",
+            "role": "Developer"
         }
     ],
+    "homepage": "https://kohlercode.com/products/typo3-extensions",
+    "support": {
+        "issues": "https://github.com/kohlercode/slug/issues",
+        "source": "https://github.com/kohlercode/slug",
+        "docs": "https://github.com/kohlercode/slug/blob/master/README.md"
+    },
+    "funding": [
+        {
+            "type": "custom",
+            "url": "https://kohlercode.com/donate"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "typo3/cms-backend": "~14.1.0",
+        "typo3/cms-core": "~14.1.0",
+        "typo3/cms-extbase": "~14.1.0",
+        "typo3/cms-fluid": "~14.1.0"
+    },
+    "suggest": {
+        "typo3/cms-dashboard": "Registers the optional Slug dashboard widget group"
+    },
+    "replace": {
+        "typo3-ter/slug": "self.version"
+    },
     "autoload": {
         "psr-4": {
-            "KOHLERCODE\\Slug\\": "Classes"
+            "KOHLERCODE\\Slug\\": "Classes/"
         }
     },
     "extra": {
