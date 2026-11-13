@@ -6,3 +6,8 @@ services:
 
   KOHLERCODE\Slug\:
     resource: '../Classes/*'
+
+  # Public so GeneralUtility::makeInstance() receives the wired service.
+  # A private service is constructed without ModuleProvider and then denies access.
+  KOHLERCODE\Slug\Security\RecordAccessGuard:
+    public: true
